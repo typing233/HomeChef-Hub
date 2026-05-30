@@ -6,11 +6,16 @@ from app.routers import auth, recipes, families, meal_plans, shopping
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HomeChef Hub", description="家庭食谱管理与膳食规划平台", version="1.0.0")
+app = FastAPI(
+    title="HomeChef Hub",
+    description="家庭食谱管理与膳食规划平台",
+    version="1.0.0",
+    redirect_slashes=False,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

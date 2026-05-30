@@ -6,6 +6,7 @@ function ShoppingLists() {
   const [selectedFamily, setSelectedFamily] = useState('')
   const [lists, setLists] = useState([])
   const [newItemName, setNewItemName] = useState({})
+  const [editing, setEditing] = useState(null)
 
   useEffect(() => {
     api.get('/families').then(r => {
@@ -53,6 +54,21 @@ function ShoppingLists() {
     loadLists()
   }
 
+  const startEdit = (item) => {
+    setEditing({ id: item.id, name: item.name, amount: item.amount || '', unit: item.unit || '' })
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    await api.put(`/shopping-lists/items/${editing.id}`, {
+      name: editing.name,
+      amount: editing.amount || null,
+      unit: editing.unit || null,
+    })
+    setEditing(null)
+    loadLists()
+  }
+
   if (families.length === 0) {
     return (
       <div style={{textAlign:'center', padding:'60px'}}>
@@ -83,11 +99,53 @@ function ShoppingLists() {
 
           {list.items.map(item => (
             <div key={item.id} className={`shopping-item ${item.checked ? 'checked' : ''}`}>
-              <input type="checkbox" checked={item.checked} onChange={() => toggleItem(item.id)} />
-              <span style={{flex:1}}>
-                {item.amount && `${item.amount} `}{item.unit && `${item.unit} `}{item.name}
-              </span>
-              <button onClick={() => deleteItem(item.id)} style={{background:'none', color:'var(--danger)', fontSize:'16px', padding:'0 4px'}}>×</button>
+              <input
+                type="checkbox"
+                checked={item.checked}
+                onChange={() => toggleItem(item.id)}
+              />
+              {editing && editing.id === item.id ? (
+                <div style={{display:'flex', gap:'6px', flex:1, alignItems:'center'}}>
+                  <input
+                    value={editing.amount}
+                    onChange={e => setEditing({...editing, amount: e.target.value})}
+                    placeholder="数量"
+                    style={{width:'70px'}}
+                  />
+                  <input
+                    value={editing.unit}
+                    onChange={e => setEditing({...editing, unit: e.target.value})}
+                    placeholder="单位"
+                    style={{width:'60px'}}
+                  />
+                  <input
+                    value={editing.name}
+                    onChange={e => setEditing({...editing, name: e.target.value})}
+                    placeholder="名称"
+                    style={{flex:1}}
+                  />
+                  <button className="btn-primary" onClick={saveEdit} style={{padding:'4px 10px', fontSize:'12px'}}>保存</button>
+                  <button className="btn-secondary" onClick={() => setEditing(null)} style={{padding:'4px 10px', fontSize:'12px'}}>取消</button>
+                </div>
+              ) : (
+                <>
+                  <span style={{flex:1, cursor:'pointer'}} onClick={() => startEdit(item)}>
+                    {item.amount && `${item.amount} `}{item.unit && `${item.unit} `}{item.name}
+                  </span>
+                  <button
+                    onClick={() => startEdit(item)}
+                    style={{background:'none', color:'var(--primary)', fontSize:'12px', padding:'0 6px'}}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    onClick={() => deleteItem(item.id)}
+                    style={{background:'none', color:'var(--danger)', fontSize:'16px', padding:'0 4px'}}
+                  >
+                    ×
+                  </button>
+                </>
+              )}
             </div>
           ))}
 

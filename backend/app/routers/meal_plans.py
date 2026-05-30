@@ -18,7 +18,7 @@ def _check_family_access(family_id: int, user: User, db: Session) -> Family:
     return family
 
 
-@router.post("/", response_model=MealPlanOut, status_code=201)
+@router.post("", response_model=MealPlanOut, status_code=201)
 def create_meal_plan(data: MealPlanCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _check_family_access(data.family_id, current_user, db)
 

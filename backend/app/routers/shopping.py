@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
+import re
 
 from app.database import get_db
 from app.models import User, Family, MealPlan, Meal, ShoppingList, ShoppingItem, Ingredient
@@ -7,6 +8,25 @@ from app.schemas.schemas import ShoppingListCreate, ShoppingListOut, ShoppingIte
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/shopping-lists", tags=["购物清单"])
+
+
+def _parse_number(s: str | None) -> float | None:
+    if not s:
+        return None
+    m = re.search(r"[\d.]+", s)
+    return float(m.group()) if m else None
+
+
+def _sum_amounts(a: str | None, b: str | None) -> str | None:
+    na, nb = _parse_number(a), _parse_number(b)
+    if na is not None and nb is not None:
+        total = na + nb
+        return str(int(total)) if total == int(total) else str(total)
+    if na is not None:
+        return a
+    if nb is not None:
+        return b
+    return a or b
 
 
 def _check_family_access(family_id: int, user: User, db: Session):
@@ -17,7 +37,7 @@ def _check_family_access(family_id: int, user: User, db: Session):
         raise HTTPException(status_code=403, detail="无权限访问")
 
 
-@router.post("/", response_model=ShoppingListOut, status_code=201)
+@router.post("", response_model=ShoppingListOut, status_code=201)
 def create_shopping_list(data: ShoppingListCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _check_family_access(data.family_id, current_user, db)
 
@@ -31,12 +51,14 @@ def create_shopping_list(data: ShoppingListCreate, db: Session = Depends(get_db)
 
     if data.meal_plan_id:
         meals = db.query(Meal).filter(Meal.meal_plan_id == data.meal_plan_id).all()
-        aggregated: dict[str, dict] = {}
+        aggregated: dict[tuple, dict] = {}
         for meal in meals:
             recipe_ingredients = db.query(Ingredient).filter(Ingredient.recipe_id == meal.recipe_id).all()
             for ing in recipe_ingredients:
-                key = ing.name.lower().strip()
-                if key not in aggregated:
+                key = (ing.name.lower().strip(), (ing.unit or "").lower().strip())
+                if key in aggregated:
+                    aggregated[key]["amount"] = _sum_amounts(aggregated[key]["amount"], ing.amount)
+                else:
                     aggregated[key] = {"name": ing.name, "amount": ing.amount, "unit": ing.unit}
 
         for item_data in aggregated.values():
@@ -91,10 +113,9 @@ def update_item(item_id: int, data: ShoppingItemUpdate, db: Session = Depends(ge
     sl = db.query(ShoppingList).filter(ShoppingList.id == item.shopping_list_id).first()
     _check_family_access(sl.family_id, current_user, db)
 
-    for field in ["name", "amount", "unit", "checked"]:
-        val = getattr(data, field, None)
-        if val is not None:
-            setattr(item, field, val)
+    update_data = data.model_dump(exclude_unset=True)
+    for field, val in update_data.items():
+        setattr(item, field, val)
 
     db.commit()
     return db.query(ShoppingList).options(joinedload(ShoppingList.items)).filter(ShoppingList.id == sl.id).first()

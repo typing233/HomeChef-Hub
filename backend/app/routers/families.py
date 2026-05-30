@@ -11,7 +11,7 @@ from app.utils.auth import get_current_user
 router = APIRouter(prefix="/api/families", tags=["家庭群组"])
 
 
-@router.post("/", response_model=FamilyOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FamilyOut, status_code=status.HTTP_201_CREATED)
 def create_family(data: FamilyCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     family = Family(
         name=data.name,
@@ -25,7 +25,7 @@ def create_family(data: FamilyCreate, db: Session = Depends(get_db), current_use
     return family
 
 
-@router.get("/", response_model=list[FamilyOut])
+@router.get("", response_model=list[FamilyOut])
 def list_families(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return current_user.families
 

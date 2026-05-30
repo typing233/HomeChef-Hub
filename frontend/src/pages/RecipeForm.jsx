@@ -13,6 +13,8 @@ function RecipeForm() {
   })
   const [categories, setCategories] = useState([])
   const [tags, setTags] = useState([])
+  const [newCategory, setNewCategory] = useState('')
+  const [newTag, setNewTag] = useState('')
 
   useEffect(() => {
     api.get('/recipes/categories').then(r => setCategories(r.data))
@@ -30,6 +32,30 @@ function RecipeForm() {
       })
     }
   }, [id])
+
+  const createCategory = async () => {
+    if (!newCategory.trim()) return
+    const res = await api.post('/recipes/categories', { name: newCategory.trim() })
+    setCategories([...categories, res.data])
+    setForm({...form, category_id: res.data.id})
+    setNewCategory('')
+  }
+
+  const createTag = async () => {
+    if (!newTag.trim()) return
+    const res = await api.post('/recipes/tags', { name: newTag.trim() })
+    setTags([...tags, res.data])
+    setForm({...form, tag_ids: [...form.tag_ids, res.data.id]})
+    setNewTag('')
+  }
+
+  const toggleTag = (tagId) => {
+    if (form.tag_ids.includes(tagId)) {
+      setForm({...form, tag_ids: form.tag_ids.filter(id => id !== tagId)})
+    } else {
+      setForm({...form, tag_ids: [...form.tag_ids, tagId]})
+    }
+  }
 
   const addIngredient = () => setForm({...form, ingredients: [...form.ingredients, {name:'', amount:'', unit:''}]})
   const addStep = () => setForm({...form, steps: [...form.steps, {order: form.steps.length + 1, description:''}]})
@@ -105,19 +131,53 @@ function RecipeForm() {
             <label>图片URL</label>
             <input value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} />
           </div>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
-            <div className="form-group">
-              <label>分类</label>
-              <select value={form.category_id} onChange={e => setForm({...form, category_id: e.target.value})}>
-                <option value="">无分类</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+
+          <div className="form-group">
+            <label>分类</label>
+            <select value={form.category_id} onChange={e => setForm({...form, category_id: e.target.value})}>
+              <option value="">无分类</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div style={{display:'flex', gap:'8px', marginTop:'8px'}}>
+              <input
+                placeholder="新分类名称..."
+                value={newCategory}
+                onChange={e => setNewCategory(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), createCategory())}
+                style={{flex:1}}
+              />
+              <button type="button" className="btn-secondary" onClick={createCategory}>新建分类</button>
             </div>
-            <div className="form-group">
-              <label>标签</label>
-              <select multiple value={form.tag_ids.map(String)} onChange={e => setForm({...form, tag_ids: Array.from(e.target.selectedOptions, o => parseInt(o.value))})}>
-                {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+          </div>
+
+          <div className="form-group">
+            <label>标签</label>
+            <div style={{display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'8px'}}>
+              {tags.map(t => (
+                <span
+                  key={t.id}
+                  className="tag"
+                  onClick={() => toggleTag(t.id)}
+                  style={{
+                    cursor: 'pointer',
+                    background: form.tag_ids.includes(t.id) ? 'var(--primary)' : '#e9ecef',
+                    color: form.tag_ids.includes(t.id) ? 'white' : 'var(--text-light)',
+                    padding: '4px 12px',
+                  }}
+                >
+                  {t.name}
+                </span>
+              ))}
+            </div>
+            <div style={{display:'flex', gap:'8px'}}>
+              <input
+                placeholder="新标签名称..."
+                value={newTag}
+                onChange={e => setNewTag(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), createTag())}
+                style={{flex:1}}
+              />
+              <button type="button" className="btn-secondary" onClick={createTag}>新建标签</button>
             </div>
           </div>
         </div>

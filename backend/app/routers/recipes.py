@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from app.database import get_db
+from app.models import User, Recipe, Tag, Category, Ingredient, Step, Family, family_members
 from app.models import User, Recipe, Tag, Category, Ingredient, Step
 from app.schemas.schemas import (
     RecipeCreate, RecipeUpdate, RecipeOut, RecipeListOut, RecipeImport,
@@ -50,7 +51,16 @@ def create_tag(data: TagCreate, db: Session = Depends(get_db), _: User = Depends
 
 
 # ─── Recipe CRUD ─────────────────────────────────────────────────────────
-@router.get("/", response_model=list[RecipeListOut])
+def _visible_author_ids(user: User, db: Session) -> list[int]:
+    """Return user IDs whose recipes are visible: self + all family members."""
+    ids = {user.id}
+    for family in user.families:
+        for member in family.members:
+            ids.add(member.id)
+    return list(ids)
+
+
+@router.get("", response_model=list[RecipeListOut])
 def list_recipes(
     search: str = Query(None),
     category_id: int = Query(None),
@@ -60,7 +70,9 @@ def list_recipes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    visible_ids = _visible_author_ids(current_user, db)
     q = db.query(Recipe).options(joinedload(Recipe.category), joinedload(Recipe.tags))
+    q = q.filter(Recipe.author_id.in_(visible_ids))
 
     if search:
         q = q.filter(or_(Recipe.title.ilike(f"%{search}%"), Recipe.description.ilike(f"%{search}%")))
@@ -69,11 +81,11 @@ def list_recipes(
     if tag_id:
         q = q.filter(Recipe.tags.any(Tag.id == tag_id))
 
-    return q.offset(skip).limit(limit).all()
+    return q.order_by(Recipe.created_at.desc()).offset(skip).limit(limit).all()
 
 
 @router.get("/{recipe_id}", response_model=RecipeOut)
-def get_recipe(recipe_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_recipe(recipe_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     recipe = db.query(Recipe).options(
         joinedload(Recipe.ingredients),
         joinedload(Recipe.steps),
@@ -83,10 +95,13 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db), _: User = Depends(
     ).filter(Recipe.id == recipe_id).first()
     if not recipe:
         raise HTTPException(status_code=404, detail="食谱不存在")
+    visible_ids = _visible_author_ids(current_user, db)
+    if recipe.author_id not in visible_ids:
+        raise HTTPException(status_code=403, detail="无权查看此食谱")
     return recipe
 
 
-@router.post("/", response_model=RecipeOut, status_code=201)
+@router.post("", response_model=RecipeOut, status_code=201)
 def create_recipe(data: RecipeCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     recipe = Recipe(
         title=data.title,
